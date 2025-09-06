@@ -17,8 +17,32 @@
       background:var(--bg); color:var(--text); -webkit-tap-highlight-color: transparent;
     }
 
-    header{ position:sticky; top:0; z-index:10; backdrop-filter:blur(8px);
-      background:rgba(15,23,42,.7); border-bottom:1px solid rgba(148,163,184,.2); }
+    /* 固定しない */
+    header{
+      position: static;   /* ← stickyをやめる */
+      top: auto;
+      z-index: 10;
+      backdrop-filter: blur(8px);
+      background: rgba(15,23,42,.7);
+      border-bottom: 1px solid rgba(148,163,184,.2);
+    }
+    
+    /* メニューボタン */
+    .menu-btn{
+      margin-top:10px; padding:8px 14px;
+      border-radius:10px; border:1px solid rgba(148,163,184,.25);
+      background:#0b1220; color:#e5e7eb; cursor:pointer;
+      font-size: clamp(13px,3.5vw,15px);
+    }
+    
+    /* 折りたたみ本体（初期は閉） */
+    .toolbar-wrapper{
+      overflow:hidden; max-height:0; opacity:0;
+      transition:max-height .25s ease, opacity .2s ease;
+      margin-top:8px;
+    }
+    .toolbar-wrapper.open{ opacity:1; } /* 開時はJSでmax-heightを設定 */
+
     .container{ max-width: 1000px; margin:0 auto; padding: 14px 16px; }
     .title{ font-size: clamp(18px, 2.8vw, 22px); font-weight:700; letter-spacing:.3px; }
     
@@ -111,22 +135,27 @@
   <header>
     <div class="container">
       <div class="title">英単語</div>
-      <!-- 1行目：検索だけフル幅 -->
-      <div class="toolbar-row">
-        <input id="search" type="text" placeholder="検索：英語 / 日本語 を部分一致で絞り込み">
+      <!-- 開閉ボタン -->
+      <button id="menuToggle" class="menu-btn">☰ メニュー</button>
+      
+      <!-- 折りたたみ（初期は閉） -->
+      <div id="toolbarWrapper" class="toolbar-wrapper">
+        <!-- 1行目：検索 -->
+        <div class="toolbar-row">
+          <input id="search" type="text" placeholder="検索：英語 / 日本語 を部分一致で絞り込み">
+        </div>
+        <!-- 2行目：横スクロールの操作群 -->
+        <div class="toolbar-row actions-scroll" aria-label="操作ボタン">
+          <button id="toggleAll" aria-label="すべて表示/非表示">すべて隠す</button>
+          <button id="shuffle" aria-label="ランダム並び替え">シャッフル</button>
+          <button id="resetOrder" aria-label="元の順に戻す">元の順に戻す</button>
+          <button id="filterChecked">チェックのみ</button>
+          <label class="btn" for="csvFile">CSVを読み込む
+            <input id="csvFile" type="file" accept=".csv,.txt" class="hidden">
+          </label>
+        </div>
       </div>
       
-      <!-- 2行目：横にスワイプできるボタン列 -->
-      <div class="toolbar-row actions-scroll" aria-label="操作ボタン">
-        <button id="toggleAll" aria-label="すべて表示/非表示">すべて隠す</button>
-        <button id="shuffle" aria-label="ランダム並び替え">シャッフル</button>
-        <button id="resetOrder" aria-label="元の順に戻す">元の順に戻す</button>
-        <button id="filterChecked">チェックのみ</button>
-        <label class="btn" for="csvFile">CSVを読み込む
-          <input id="csvFile" type="file" accept=".csv,.txt" class="hidden">
-        </label>
-      </div>
-
       <div class="hint">CSV（1列目=英語, 2列目=日本語。ヘッダ可）を読み込むと、番号は読み込んだ順で固定・チェック状態は端末内に保存されます。</div>
     </div>
   </header>
@@ -290,6 +319,33 @@
 
     // ===== 初期化 =====
     const restored=loadData(); setButtonsEnabled(restored); renderList(restored?data:[]);
+
+    // 折りたたみ開閉
+    const menuToggle = document.getElementById('menuToggle');
+    const toolbarWrapper = document.getElementById('toolbarWrapper');
+    
+    function setWrapperHeight(open){
+      if(open){
+        toolbarWrapper.classList.add('open');
+        toolbarWrapper.style.maxHeight = toolbarWrapper.scrollHeight + 'px';
+        menuToggle.textContent = '✖ 閉じる';
+      }else{
+        toolbarWrapper.style.maxHeight = '0px';
+        toolbarWrapper.classList.remove('open');
+        menuToggle.textContent = '☰ メニュー';
+      }
+    }
+    setWrapperHeight(false); // 初期は閉
+    
+    menuToggle.addEventListener('click', ()=>{
+      setWrapperHeight(!toolbarWrapper.classList.contains('open'));
+    });
+    
+    window.addEventListener('resize', ()=>{
+      if(toolbarWrapper.classList.contains('open')){
+        toolbarWrapper.style.maxHeight = toolbarWrapper.scrollHeight + 'px';
+      }
+    });
   </script>
 </body>
 </html>

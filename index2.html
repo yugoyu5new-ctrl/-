@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>英単語</title>
+  <style>
+    :root{
+      --bg:#0f172a; --card:#111827; --muted:#94a3b8; --text:#e5e7eb; --accent:#22d3ee;
+      --check-size:28px;
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP",
+      "Hiragino Kaku Gothic ProN","Meiryo", sans-serif;
+      background:var(--bg); color:var(--text); -webkit-tap-highlight-color: transparent;
+    }
+
+    header{ position:sticky; top:0; z-index:10; backdrop-filter:blur(8px);
+      background:rgba(15,23,42,.7); border-bottom:1px solid rgba(148,163,184,.2); }
+    .container{ max-width: 1000px; margin:0 auto; padding: 14px 16px; }
+    .title{ font-size: clamp(18px, 2.8vw, 22px); font-weight:700; letter-spacing:.3px; }
+
+    /* toolbar */
+    .toolbar{
+      display:grid; gap:10px; margin-top:10px;
+      grid-template-columns: 1fr auto auto auto auto auto;
+    }
+    input[type="text"]{
+      width:100%; padding:12px; border-radius:12px;
+      border:1px solid rgba(148,163,184,.25); background:#0b1220; color:var(--text); outline:0;
+      font-size: clamp(14px, 3.5vw, 16px);
+    }
+    input::placeholder{ color:#7c8596; }
+    button, label.btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      padding:10px 12px; border-radius:12px; border:1px solid rgba(148,163,184,.25);
+      background:#0b1220; color:var(--text); cursor:pointer; min-height:40px;
+      font-size: clamp(13px, 3.5vw, 15px);
+    }
+    button:hover, label.btn:hover{ border-color: rgba(34,211,238,.7); }
+    button.active{ border-color: var(--accent); }
+    button:disabled, label.btn:has(input:disabled){ opacity:.6; cursor:not-allowed; }
+    .hidden{ display:none !important; }
+    .hint{ color:var(--muted); font-size: clamp(12px, 3.2vw, 13px); margin-top:6px; }
+
+    /* モバイル: ボタン縦並び＆2列目に収める */
+    @media (max-width: 720px){
+      .toolbar{
+        grid-template-columns: 1fr; /* 全部縦積み */
+      }
+      button, label.btn{ width:100%; }
+    }
+
+    .list{ display:grid; grid-template-columns:1fr; gap:10px; padding:16px; }
+    /* 各アイテムを2カラム(本文/チェック)のグリッドに */
+    .item{
+      background:var(--card); border:1px solid rgba(148,163,184,.15); border-radius:14px;
+      padding:12px; display:grid; grid-template-columns: 1fr auto; align-items:center; gap:10px;
+      transition: transform .06s ease;
+    }
+    .item:active{ transform: scale(.99); }
+    .main{ min-width:0; }
+    .row-top{
+      display:flex; align-items:center; gap:10px; min-width:0;
+    }
+    .num{
+      display:inline-flex; align-items:center; justify-content:center;
+      font-size:12px; padding:3px 8px; border-radius:999px;
+      background:rgba(34,211,238,.12); color:#7de2ee; border:1px solid rgba(34,211,238,.35);
+      font-variant-numeric: tabular-nums; flex-shrink:0;
+    }
+    .en{
+      font-weight:700; min-width:0;
+      /* 英単語が1文字ずつ折り返されないように */
+      word-break: normal; overflow-wrap: anywhere;
+      font-size: clamp(16px, 4.8vw, 20px);
+    }
+    .jp{
+      margin:6px 0 0 0; color:var(--muted); opacity:0; transition:opacity .15s ease;
+      word-break: normal; overflow-wrap: anywhere; /* 日本語も自然に折返し */
+      font-size: clamp(14px, 4.0vw, 18px);
+    }
+    .item.revealed .jp{ opacity:1; color:var(--text); }
+
+    .check{
+      width:var(--check-size); height:var(--check-size); padding:0;
+      border:1px solid rgba(148,163,184,.35); border-radius:8px; background:#0b1220; color:#e5e7eb;
+      cursor:pointer; display:inline-grid; place-items:center; line-height:1; flex-shrink:0;
+      touch-action: manipulation;
+    }
+    .check:hover{ border-color: rgba(34,211,238,.7); }
+    .check.on{ border-color: rgba(34,211,238,.9); }
+    .check::after{ content:''; }
+    .check.on::after{ content:'✓'; font-size:16px; }
+
+    footer{ text-align:center; color:var(--muted); padding:30px 0 60px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="title">英単語</div>
+      <div class="toolbar">
+        <input id="search" type="text" placeholder="検索：英語 / 日本語 を部分一致で絞り込み">
+        <button id="toggleAll" aria-label="すべて表示/非表示">すべて隠す</button>
+        <button id="shuffle" aria-label="ランダム並び替え">シャッフル</button>
+        <button id="resetOrder" aria-label="元の順に戻す">元の順に戻す</button>
+        <button id="filterChecked">チェックのみ</button>
+        <label class="btn" for="csvFile">CSVを読み込む
+          <input id="csvFile" type="file" accept=".csv,.txt" class="hidden">
+        </label>
+      </div>
+      <div class="hint">CSV（1列目=英語, 2列目=日本語。ヘッダ可）を読み込むと、番号は読み込んだ順で固定・チェック状態は端末内に保存されます。</div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="count" class="hint">CSVを読み込んでください。</div>
+    <div id="list" class="list"></div>
+  </main>
+
+  <footer><div>© 状態は localStorage に保存</div></footer>
+
+  <script>
+    // ===== CSVパーサ =====
+    function parseCSV(text){
+      const rows=[]; let row=[], cell='', inQuotes=false;
+      for (let i=0;i<text.length;i++){
+        const c=text[i], next=text[i+1];
+        if (c === '"'){ if (inQuotes && next === '"'){ cell+='"'; i++; } else inQuotes=!inQuotes; }
+        else if (c === ',' && !inQuotes){ row.push(cell); cell=''; }
+        else if ((c === '\n' || c === '\r') && !inQuotes){
+          if (cell.length || row.length){ row.push(cell); rows.push(row); row=[]; cell=''; }
+          if (c === '\r' && next === '\n') i++;
+        } else cell += c;
+      }
+      if (cell.length || row.length){ row.push(cell); rows.push(row); }
+      return rows.filter(r=>r.length && (r[0]??'').trim()!=='');
+    }
+
+    // ===== データ／状態 =====
+    const PREFIX    = 'toeic:' + location.pathname; // ぶつかり防止
+    const DATA_KEY  = PREFIX + ':wordPairs.data.v1';
+    const CHECK_KEY = PREFIX + ':wordPairs.check.v1';
+
+    /** @type {{en:string,jp:string,_i:number}[]} */
+    let data=[], original=[], filtered=[];
+    let allRevealed=false, filterChecked=false;
+    let checked = new Set(JSON.parse(localStorage.getItem(CHECK_KEY) || '[]'));
+    const keyOf = (p)=>`${p.en}｜${p.jp}`;
+    const isChecked = (p)=>checked.has(keyOf(p));
+    function setChecked(p,on){
+      if(on) checked.add(keyOf(p)); else checked.delete(keyOf(p));
+      localStorage.setItem(CHECK_KEY, JSON.stringify([...checked]));
+    }
+    function saveData(){ localStorage.setItem(DATA_KEY, JSON.stringify(data)); }
+    function loadData(){
+      try{
+        const raw=localStorage.getItem(DATA_KEY); if(!raw) return false;
+        const parsed=JSON.parse(raw); if(!Array.isArray(parsed)||!parsed.length) return false;
+        data = parsed.map((p,i)=>({en:String(p.en), jp:String(p.jp), _i:Number.isFinite(p._i)?p._i:i}));
+        data.sort((a,b)=>a._i-b._i); original=data.slice(); filtered=data.slice(); return true;
+      }catch{ return false; }
+    }
+
+    // ===== UI 参照 =====
+    const listEl=document.getElementById('list');
+    const countEl=document.getElementById('count');
+    const searchEl=document.getElementById('search');
+    const toggleAllBtn=document.getElementById('toggleAll');
+    const shuffleBtn=document.getElementById('shuffle');
+    const resetBtn=document.getElementById('resetOrder');
+    const filterBtn=document.getElementById('filterChecked');
+    const fileInput=document.getElementById('csvFile');
+
+    function setButtonsEnabled(ok){
+      [toggleAllBtn,shuffleBtn,resetBtn,filterBtn,searchEl].forEach(el=>el.disabled=!ok);
+    }
+
+    // ===== 描画 =====
+    function renderList(items){
+      const frag=document.createDocumentFragment();
+      items.forEach(pair=>{
+        const item=document.createElement('div'); item.className='item'+(allRevealed?' revealed':'');
+        item.tabIndex=0;
+        item.addEventListener('click', ()=> item.classList.toggle('revealed'));
+        item.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); item.click(); }});
+
+        const main=document.createElement('div'); main.className='main';
+        const rowTop=document.createElement('div'); rowTop.className='row-top';
+        const num=document.createElement('span'); num.className='num'; num.textContent=String((pair._i??0)+1);
+        const en=document.createElement('div'); en.className='en'; en.textContent=pair.en;
+        rowTop.append(num,en);
+        const jp=document.createElement('div'); jp.className='jp'; jp.textContent=pair.jp;
+        main.append(rowTop,jp);
+
+        const chk=document.createElement('button');
+        const on=isChecked(pair);
+        chk.className='check'+(on?' on':'');
+        chk.setAttribute('aria-label', on?'チェック済':'未チェック');
+        chk.setAttribute('role','checkbox'); chk.setAttribute('aria-checked', on?'true':'false');
+        chk.addEventListener('click', ev=>{
+          ev.stopPropagation();
+          const next=!isChecked(pair); setChecked(pair,next);
+          if(filterChecked) applySearch();
+          else{ chk.classList.toggle('on',next); chk.setAttribute('aria-checked', next?'true':'false'); }
+        });
+        chk.addEventListener('keydown', e=>{ if(e.key===' '||e.key==='Enter'){ e.preventDefault(); chk.click(); }});
+
+        item.append(main, chk);
+        frag.append(item);
+      });
+      listEl.innerHTML=''; listEl.append(frag);
+
+      const n=items.length;
+      countEl.textContent = n ? `${n} 語（タップで日本語の表示/非表示）` : 'CSVを読み込んでください。';
+      toggleAllBtn.textContent = allRevealed ? 'すべて隠す' : 'すべて表示';
+      setButtonsEnabled(!!n);
+    }
+
+    // ===== 検索・フィルタ =====
+    function applySearch(){
+      if(!data.length){ renderList([]); return; }
+      const q=(searchEl.value||'').trim().toLowerCase();
+      filtered = !q ? data.slice()
+                    : data.filter(p=>p.en.toLowerCase().includes(q)||p.jp.toLowerCase().includes(q));
+      if(filterChecked) filtered=filtered.filter(isChecked);
+      renderList(filtered);
+    }
+    searchEl.addEventListener('input', applySearch);
+
+    // ===== ボタン =====
+    toggleAllBtn.addEventListener('click', ()=>{
+      allRevealed=!allRevealed;
+      document.querySelectorAll('.item').forEach(el=>el.classList.toggle('revealed',allRevealed));
+      toggleAllBtn.textContent = allRevealed ? 'すべて隠す' : 'すべて表示';
+    });
+    shuffleBtn.addEventListener('click', ()=>{
+      for(let i=data.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [data[i],data[j]]=[data[j],data[i]]; }
+      applySearch(); saveData();
+    });
+    resetBtn.addEventListener('click', ()=>{ data=original.slice(); applySearch(); saveData(); });
+    filterBtn.addEventListener('click', ()=>{
+      filterChecked=!filterChecked; filterBtn.classList.toggle('active', filterChecked);
+      filterBtn.textContent = filterChecked ? 'チェックのみ解除' : 'チェックのみ';
+      applySearch();
+    });
+
+    // ===== CSV 読み込み =====
+    fileInput.addEventListener('change', async e=>{
+      const file=e.target.files?.[0]; if(!file) return;
+      const text=await file.text();
+      const rows=parseCSV(text).filter(r=>r.length>=2);
+      if(!rows.length){ alert('CSVが空です'); return; }
+      const first=rows[0].map(s=>(s||'').trim().toLowerCase());
+      const hasHeader=(first[0]?.includes('english')||first[0]?.includes('en')||first[0]?.includes('word')||first[0]?.includes('単語'))||
+                       (first[1]?.includes('japanese')||first[1]?.includes('jp')||first[1]?.includes('訳'));
+      const start=hasHeader?1:0;
+
+      const parsed=[];
+      for(let i=start;i<rows.length;i++){
+        const en=(rows[i][0]||'').trim();
+        const jp=(rows[i][1]||'').trim();
+        if(!en||!jp) continue;
+        parsed.push({en,jp});
+      }
+      if(!parsed.length){ alert('有効なデータが見つかりませんでした。（1列目=英語, 2列目=日本語）'); return; }
+
+      data = parsed.map((p,i)=>({...p,_i:i}));
+      original=data.slice(); filtered=data.slice();
+      allRevealed=false; searchEl.value=''; saveData(); renderList(filtered);
+    });
+
+    // ===== 初期化 =====
+    const restored=loadData(); setButtonsEnabled(restored); renderList(restored?data:[]);
+  </script>
+</body>
+</html>
